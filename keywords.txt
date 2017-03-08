@@ -1,0 +1,5 @@
+malignant melanoma
+squamous cell carcinoma
+basal cell carcinoma
+benign nevi
+atypical nevi
