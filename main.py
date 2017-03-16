@@ -50,6 +50,7 @@ def scrape_urls(keyword_file_path, search_engine='google'):
     # use chrome as the default browser for our scrape, but another browser (i.e. firefox) can be used as well
     driver = selenium.webdriver.Chrome('/Users/mjdietzx/Downloads/chromedriver')
 
+    # TODO: date range, location, language,
     advanced_search_options = {
         'keywords': '',  # keywords we are searching for
         'as_eq': 'pathology histology histopathology prognosis chart diagram graph plot figure',  # omit these results
@@ -98,7 +99,9 @@ def download_images():
 
 
 if __name__ == '__main__':
-    # scrape the unique urls of all images found when searching with keywords, store meta data in image_details.pickle
-    scrape_urls('keywords.txt', search_engine='google')
-    # download all the images from their urls and save them to dataset_dir
+    # scrape the unique resource urls of all images found when searching with keywords
+    # store meta data in image_details.pickle
+    for search_engine in ['google', 'yandex', 'baidu', 'bing']:
+        scrape_urls('keywords.txt', search_engine=search_engine)
+    # download all the images from their resource urls and save them to `dataset_dir`
     download_images()
