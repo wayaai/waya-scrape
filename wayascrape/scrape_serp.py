@@ -50,54 +50,54 @@ SHOW_MORE_RESULTS_XPATH = {
 }
 
 
-def get_url(url, search_engine='google'):
+def get_url(url, search_engine):
     if search_engine is 'google':
-        if not url or not url.startswith('/imgres?imgurl='):
-            return
-        return urllib.parse.unquote(url.split('/imgres?imgurl=')[1].split('&imgrefurl=')[0])
+        starts_with = '/imgres?imgurl='
+        img_tag = '/imgres?imgurl='
     if search_engine is 'yandex':
-        if not url or not url.startswith('/images/search?'):
-            return
-        return urllib.parse.unquote(url.split('img_url=')[1].split('&')[0])
+        starts_with = '/images/search?'
+        img_tag = 'img_url='
     if search_engine is 'baidu':
-        if not url or not url.startswith('https://image.baidu.com/search/'):
-            if not url.startswith('/search/detail'):
-                return
-        return urllib.parse.unquote(url.split('objurl=')[1].split('&')[0])
+        starts_with = 'https://image.baidu.com/search/'
+        img_tag = 'objurl='
     if search_engine is 'bing':
         url = ast.literal_eval(url).get('murl')
-        if url:
-            return url
+        return url
+
+    if not url or not url.startswith(starts_with):
+        if search_engine is not 'baidu' or not url.startswith('/search/detail'):
+            return
+
+    return urllib.parse.unquote(url.split(img_tag)[1].split('&')[0])
 
 
-def results_extract_urls(driver, search_engine='google'):
-    time.sleep(10)
+def results_extract_urls(driver, search_engine):
+    time.sleep(6)
+    # scroll to the bottom of page, TODO: click the 'more results' button if we get to it
     for _ in range(5):
         driver.execute_script('window.scrollTo(0, document.body.scrollHeight);')
-        time.sleep(2.5)
+        time.sleep(2)
 
     page_source = driver.page_source
     soup = BeautifulSoup(page_source, 'lxml')
 
     urls = []
+    url_field = 'href'
 
-    get = 'href'
     if search_engine is 'google':
-        it = soup.find_all('a')
+        result_containers = soup.find_all('a')
     elif search_engine is 'yandex':
-        it = soup.find_all('a', class_='serp-item__link')
+        result_containers = soup.find_all('a', class_='serp-item__link')
     elif search_engine is 'baidu':
-        it = soup.find_all('div', class_='imgbox')
-        it = list(map(lambda x: x.a, it))
+        result_containers = soup.find_all('div', class_='imgbox')
+        result_containers = list(map(lambda x: x.a, result_containers))
     elif search_engine is 'bing':
-        it = soup.find_all('a', class_='iusc')
-        get = 'm'
-    else:
-        assert False
+        result_containers = soup.find_all('a', class_='iusc')
+        url_field = 'm'
 
-    for link in it:
-        url = link.get(get)
-        url = get_url(url, search_engine=search_engine)
+    for link in result_containers:
+        url = link.get(url_field)
+        url = get_url(url, search_engine)
         if url:
             urls.append(url)
 
@@ -118,27 +118,32 @@ def search_by_image(driver, image_path, search_engine='google'):
 
     WebDriverWait(driver, 10).until(EC.visibility_of_element_located(SHOW_IMAGE_RESULTS.get(search_engine))).click()
 
-    return results_extract_urls(driver, search_engine=search_engine)
+    return results_extract_urls(driver, search_engine)
 
 
 def search_by_keywords(driver, advanced_search_options, search_engine='google'):
     keywords = advanced_search_options.get('keywords').replace(' ', '+')
+    # results must not include any words in this string
+    as_eq = advanced_search_options.get('as_eq', '').replace(' ', '+')
 
     if search_engine is 'google':
-        # results must NOT include any words in this string
-        as_eq = advanced_search_options.get('as_eq', '').replace(' ', '+')
-        keywords = '{}&as_eq={}'.format(keywords, as_eq)
+        if as_eq:
+            keywords = '{}&as_eq={}'.format(keywords, as_eq)
     elif search_engine is 'yandex':
-        keywords = advanced_search_options.get('keywords')
-        n = advanced_search_options.get('as_eq').replace(' ', ' -')  # still need spaces
-        keywords = urllib.parse.quote_plus('{} -{}'.format(keywords, n))  # need ~~ on the first excluded keyword
+        if as_eq:
+            as_eq = as_eq.replace('+', ' -')  # need spaces between words
+            # undo replacing ' ' with '+' and need '-' between the last keyword and first excluded word
+            keywords = urllib.parse.quote_plus('{} -{}'.format(keywords.replace('+', ' '), as_eq))
     elif search_engine is 'baidu':
-        q4 = advanced_search_options.get('as_eq', '').replace(' ', '+')
-        keywords = '{}&q4={}'.format(keywords, q4)
+        if as_eq:
+            keywords = '{}&q4={}'.format(keywords, as_eq)
     elif search_engine is 'bing':
-        n = advanced_search_options.get('as_eq', '').replace(' ', '+-')
-        keywords = '{}+-{}'.format(keywords, n)
+        if as_eq:
+            as_eq = as_eq.replace('+', '+-')
+            keywords = '{}+-{}'.format(keywords, as_eq)  # need '+-' on the first excluded word
+    else:
+        assert False, 'Unsupported search engine.'
 
     search_url = '{}={}'.format(IMAGE_SEARCH_BASE_URLS.get(search_engine), keywords)
     driver.get(search_url)
-    return results_extract_urls(driver, search_engine=search_engine)
+    return results_extract_urls(driver, search_engine)
