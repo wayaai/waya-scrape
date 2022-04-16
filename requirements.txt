@@ -1,6 +1,0 @@
-beautifulsoup4
-imagehash
-lxml
-Pillow
-requests
-selenium
